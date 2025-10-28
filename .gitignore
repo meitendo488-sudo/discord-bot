@@ -1,0 +1,14 @@
+# Hide environment file
+.env
+
+# Node modules
+node_modules/
+
+# Log files
+*.log
+
+# OS cache files
+.DS_Store
+
+# Backup or temp files
+*.tmp
