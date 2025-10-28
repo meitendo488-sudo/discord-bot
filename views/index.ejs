@@ -1,75 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title><%= botName %> Stats</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #555;
-      color: white;
-      font-family: sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      flex-direction: column;
-    }
-    .background-slideshow {
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-    }
-    .background-slideshow img {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      opacity: 0;
-      transition: opacity 1s ease-in-out;
-    }
-    .background-slideshow img.active {
-      opacity: 1;
-    }
-    .card {
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 20px;
-      padding: 40px;
-      text-align: center;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-    }
-    img.avatar {
-      border-radius: 50%;
-      width: 80px;
-      height: 80px;
-      margin-bottom: 10px;
-    }
-  </style>
-</head>
-<body>
-  <div class="background-slideshow">
-    <img src="/images/image1.png" class="bg active">
-    <img src="/images/image2.png" class="bg">
-    <img src="/images/image3.png" class="bg">
-  </div>
-
-  <div class="card">
-    <img src="<%= botAvatar %>" alt="Bot Avatar" class="avatar">
-    <h1><%= botName %>#<%= botDiscriminator %></h1>
-    <h2>Lost Spirit Stats</h2>
-    <p>Top 10 Players</p>
-  </div>
-
-  <script>
-    const slides = document.querySelectorAll('.background-slideshow img');
-    let current = 0;
-    setInterval(() => {
-      slides[current].classList.remove('active');
-      current = (current + 1) % slides.length;
-      slides[current].classList.add('active');
-    }, 30000);
-  </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IchiBot Status</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "Poppins", sans-serif;
+        background: url("https://images.alphacoders.com/132/thumb-1920-1320918.jpeg") no-repeat center center fixed;
+        background-size: cover;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        text-align: center;
+      }
+      .card {
+        background: rgba(0, 0, 0, 0.7);
+        padding: 30px 40px;
+        border-radius: 20px;
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+      }
+      .avatars {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-bottom: 15px;
+      }
+      .avatar {
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+      }
+      h1 {
+        margin: 10px 0 0;
+        font-size: 28px;
+      }
+      p {
+        margin: 5px 0;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="avatars">
+        <img src="<%= botAvatar %>" alt="Bot Avatar" class="avatar" />
+        <img src="<%= userAvatar %>" alt="User Avatar" class="avatar" />
+      </div>
+      <h1><%= botName %></h1>
+      <p>Lost Spirit Stats</p>
+      <p>Connected as <%= username %></p>
+      <p>⚔️ Top 10 Players Coming Soon ⚔️</p>
+    </div>
+  </body>
 </html>
