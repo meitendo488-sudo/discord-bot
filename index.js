@@ -6,8 +6,8 @@ const express = require("express");
 const { Client, GatewayIntentBits } = require("discord.js");
 
 const PORT = process.env.PORT || 3000;
-const BOT_TOKEN = process.env.BOT_TOKEN;           // set this in Render environment
-const OWNER_ID = process.env.OWNER_ID || "1042488971017588797"; // set your user ID in Render env for website avatar
+const BOT_TOKEN = process.env.BOT_TOKEN; // Set this in Render env
+const OWNER_ID = process.env.OWNER_ID || "1042488971017588797"; // your user id for website avatar
 
 if (!BOT_TOKEN) {
   console.error("Missing BOT_TOKEN in environment. Set BOT_TOKEN in Render/ENV.");
@@ -40,23 +40,30 @@ setInterval(saveXP, 10000);
 
 // ---------- Discord client ----------
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+  ],
 });
 
 client.once("clientReady" in client ? "clientReady" : "ready", () => {
-  // compatibility note: older discord.js used 'ready'. Newer emit 'clientReady' as a convenience.
   console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
 // Helper: ensure xp entry
 function ensureXpEntry(id, username) {
   if (!xpData[id]) xpData[id] = { xp: 0, level: 1, username: username || "Unknown" };
-  else if (username) xpData[id].username = username; // update name if changed
+  else if (username) xpData[id].username = username;
 }
 
-// Simple XP awarding for each message (you can tweak)
+// Simple XP awarding for each message (non-command)
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
+  if (!message.guild) return; // only in servers
+  if (message.content.startsWith("!")) return; // don't award for commands (optional)
+
   const id = message.author.id;
   ensureXpEntry(id, message.author.username);
   const gain = Math.floor(Math.random() * 15) + 5;
@@ -66,7 +73,8 @@ client.on("messageCreate", (message) => {
   const needed = xpData[id].level * 100;
   if (xpData[id].xp >= needed) {
     xpData[id].level++;
-    message.reply(`🎉 ${message.author.username} leveled up to level ${xpData[id].level}!`);
+    // quietly DM or reply — here we reply to the user in-channel:
+    message.reply(`🎉 ${message.author.username} leveled up to level ${xpData[id].level}!`).catch(() => {});
   }
 });
 
@@ -95,7 +103,6 @@ client.on("messageCreate", async (message) => {
   const cmd = args.shift().toLowerCase();
   const uid = message.author.id;
 
-  // simple per-command cooldowns (customize seconds)
   const cooldownTimes = {
     cmds: 3,
     commands: 3,
@@ -104,17 +111,18 @@ client.on("messageCreate", async (message) => {
     lb: 10,
     leaderboard: 10,
     stats: 5,
+    gamble: 20,
   };
 
   const cd = cooldownTimes[cmd] ?? 3;
   const cdCheck = checkCooldown(cmd, uid, cd);
   if (!cdCheck.ok) {
-    return message.reply(`⏳ Command on cooldown. Try again in ${cdCheck.timeLeft}s.`);
+    return message.reply(`⏳ Command on cooldown. Try again in ${cdCheck.timeLeft}s.`).catch(() => {});
   }
 
-  // Commands
+  // === simple commands ===
   if (cmd === "ping") {
-    return message.reply("🏓 Pong!");
+    return message.reply("🏓 Pong!").catch(() => {});
   }
 
   if (cmd === "cmds" || cmd === "commands") {
@@ -122,33 +130,82 @@ client.on("messageCreate", async (message) => {
       "!ping — bot latency",
       "!cmds / !commands — show this list",
       "!bleach — random Bleach quote",
+      "!gamble — risk or win XP (25% lose 5k + 1m mute, 25% +5k XP, 50% nothing)",
       "!leaderboard / !lb — top 10 XP",
       "!stats — your XP & level",
     ];
-    return message.reply(`📜 Commands:\n\n${list.join("\n")}`);
+    return message.reply(`📜 Commands:\n\n${list.join("\n")}`).catch(() => {});
   }
 
   if (cmd === "bleach") {
-    // sample characters/quotes (expand as you like)
-    const characters = [
-      "Ichigo Kurosaki",
-      "Rukia Kuchiki",
-      "Toshiro Hitsugaya",
-      "Byakuya Kuchiki",
-      "Renji Abarai",
-      "Kisuke Urahara",
-      "Kenpachi Zaraki",
-      "Sosuke Aizen",
-      "Byakuya Kuchiki",
-      "Orihime Inoue",
-    ];
+    // Return quotes (wrapped in quotes) or small lines — user asked for "quotes"
     const quotes = [
-      "If you fight for your friends, no one can take them away.",
-      "We are all like fireworks: we climb, shine and always go our separate ways and become further apart.",
-      "I'm not fighting because I want to win. I'm fighting because I have to protect you.",
+      `"If you fight for your friends, no one can take them away."`,
+      `"We are all like fireworks: we climb, shine and always go our separate ways and become further apart."`,
+      `"I'm not fighting because I want to win. I'm fighting because I have to protect you."`,
+      `"Which is more real? The spider's webs you can't see, or the ties you can?"`,
+      `"Sometimes you must hurt in order to know, fall in order to grow, lose in order to gain."`,
     ];
-    const pick = Math.random() < 0.6 ? characters[Math.floor(Math.random() * characters.length)] : quotes[Math.floor(Math.random() * quotes.length)];
-    return message.reply(`🌀 ${pick}`);
+    const pick = quotes[Math.floor(Math.random() * quotes.length)];
+    const reply = await message.reply(`🌀 ${pick}`).catch(() => null);
+    // clear response after 60s to avoid chat flood
+    if (reply) setTimeout(() => reply.delete().catch(() => {}), 60_000);
+    return;
+  }
+
+  if (cmd === "gamble") {
+    // Outcomes:
+    // 25% -5k XP and mute for 1 minute (role "muted" must exist)
+    // 25% +5k XP
+    // 50% nothing
+    if (!message.guild) return message.reply("This command must be used in a server.").catch(() => {});
+    ensureXpEntry(uid, message.author.username);
+
+    const roll = Math.random();
+    if (roll < 0.25) {
+      // lose 5k XP, mute 1 minute
+      xpData[uid].xp = Math.max(0, xpData[uid].xp - 5000);
+      saveXP();
+
+      // find muted role by name
+      const mutedRole = message.guild.roles.cache.find((r) => r.name.toLowerCase() === "muted");
+      let replied = await message.reply(`You lost 5000 XP and will be muted for 1 minute.`).catch(() => null);
+      if (mutedRole && message.member) {
+        try {
+          await message.member.roles.add(mutedRole);
+          setTimeout(() => {
+            message.member.roles.remove(mutedRole).catch(() => {});
+          }, 60_000);
+        } catch (e) {
+          // couldn't add role — maybe permissions
+          if (replied) {
+            replied.edit(`${replied.content}\n⚠️ Could not add 'muted' role (check bot permissions).`).catch(() => {});
+          } else {
+            message.reply("⚠️ Could not add 'muted' role (check bot permissions).").catch(() => {});
+          }
+        }
+      } else {
+        if (replied) {
+          replied.edit(`${replied.content}\n⚠️ 'muted' role not found on this server.`).catch(() => {});
+        } else {
+          message.reply("⚠️ 'muted' role not found on this server.").catch(() => {});
+        }
+      }
+      if (replied) setTimeout(() => replied.delete().catch(() => {}), 60_000);
+      return;
+    } else if (roll < 0.5) {
+      // win 5k XP
+      xpData[uid].xp += 5000;
+      saveXP();
+      const r = await message.reply("🎉 You won 5000 XP!").catch(() => null);
+      if (r) setTimeout(() => r.delete().catch(() => {}), 60_000);
+      return;
+    } else {
+      // nothing
+      const r = await message.reply("Nothing happened... better luck next time.").catch(() => null);
+      if (r) setTimeout(() => r.delete().catch(() => {}), 60_000);
+      return;
+    }
   }
 
   if (cmd === "leaderboard" || cmd === "lb") {
@@ -156,27 +213,23 @@ client.on("messageCreate", async (message) => {
       .sort(([, a], [, b]) => b.xp - a.xp)
       .slice(0, 10);
 
-    if (sorted.length === 0) return message.reply("📉 No XP data yet. Talk in the server to earn XP!");
+    if (sorted.length === 0) return message.reply("📉 No XP data yet. Talk in the server to earn XP!").catch(() => {});
 
-    const text = sorted
-      .map(([id, data], i) => `**${i + 1}.** ${data.username || "Unknown"} — ${data.xp} XP (Lv ${data.level})`)
-      .join("\n");
-    return message.reply(`🏆 Top players:\n\n${text}`);
+    const text = sorted.map(([id, data], i) => `**${i + 1}.** ${data.username || "Unknown"} — ${data.xp} XP (Lv ${data.level})`).join("\n");
+    return message.reply(`🏆 Top players:\n\n${text}`).catch(() => {});
   }
 
   if (cmd === "stats") {
     const data = xpData[uid];
-    if (!data) return message.reply("You have no XP yet — start chatting!");
-    return message.reply(`📊 Your stats: XP ${data.xp} — Level ${data.level}`);
+    if (!data) return message.reply("You have no XP yet — start chatting!").catch(() => {});
+    return message.reply(`📊 Your stats: XP ${data.xp} — Level ${data.level}`).catch(() => {});
   }
 });
 
-
-// ---------- Website route ----------
+// ---------- Website routes (views + API) ----------
 app.get("/", async (req, res) => {
   try {
     const botUser = client.user;
-    // fetch owner user via discord.js (works once bot is logged in)
     let ownerUser = null;
     try {
       ownerUser = await client.users.fetch(OWNER_ID);
@@ -200,6 +253,15 @@ app.get("/", async (req, res) => {
     console.error("Website error:", err);
     res.status(500).send("Server error");
   }
+});
+
+// small API to return leaderboard JSON (used by client-side for live update)
+app.get("/api/leaderboard", (req, res) => {
+  const top = Object.entries(xpData)
+    .sort(([, a], [, b]) => b.xp - a.xp)
+    .slice(0, 10)
+    .map(([id, d], i) => ({ rank: i + 1, id, name: d.username || "Unknown", xp: d.xp, level: d.level }));
+  res.json({ top });
 });
 
 // start express
