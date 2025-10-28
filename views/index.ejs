@@ -1,167 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IchiBot Status</title>
+  <meta charset="UTF-8">
+  <title><%= botName %> Stats</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      font-family: 'Poppins', sans-serif;
-      color: white;
-    }
-
     body {
+      margin: 0;
       overflow: hidden;
-      height: 100vh;
-      width: 100vw;
-      background-size: cover;
-      background-position: center;
-      background-repeat: no-repeat;
-      transition: background-image 2s ease-in-out;
+      background: #555;
+      color: white;
+      font-family: sans-serif;
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
-      text-shadow: 0 0 10px rgba(0,0,0,0.8);
-      backdrop-filter: brightness(0.8);
+      height: 100vh;
+      flex-direction: column;
     }
-
-    .overlay {
+    .background-slideshow {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+    }
+    .background-slideshow img {
       position: absolute;
-      top: 0;
-      left: 0;
+      inset: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0, 0, 0, 0.5);
-      z-index: 0;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
     }
-
-    .container {
-      position: relative;
-      z-index: 2;
-      text-align: center;
-      padding: 30px;
-      background: rgba(0, 0, 0, 0.4);
+    .background-slideshow img.active {
+      opacity: 1;
+    }
+    .card {
+      background: rgba(0, 0, 0, 0.6);
       border-radius: 20px;
+      padding: 40px;
+      text-align: center;
       box-shadow: 0 0 20px rgba(0,0,0,0.5);
     }
-
-    img {
+    img.avatar {
       border-radius: 50%;
-      width: 120px;
-      height: 120px;
-      border: 3px solid white;
-      margin: 10px;
-    }
-
-    h1 {
-      font-size: 2rem;
-      margin-top: 10px;
-    }
-
-    h2 {
-      font-weight: 400;
-      margin-bottom: 20px;
-    }
-
-    .leaderboard {
-      margin-top: 20px;
-      text-align: left;
-    }
-
-    .leaderboard h3 {
-      text-align: center;
+      width: 80px;
+      height: 80px;
       margin-bottom: 10px;
     }
-
-    .leaderboard ol {
-      list-style: none;
-      padding: 0;
-    }
-
-    .leaderboard li {
-      background: rgba(255, 255, 255, 0.1);
-      margin: 5px 0;
-      padding: 10px;
-      border-radius: 10px;
-    }
-
   </style>
 </head>
 <body>
-  <div class="overlay"></div>
-  <div class="container">
-    <div id="profiles">
-      <img id="botAvatar" alt="Bot Avatar" />
-      <img id="userAvatar" alt="User Avatar" />
-    </div>
-    <h1>IchiBot#3137</h1>
+  <div class="background-slideshow">
+    <img src="/images/image1.png" class="bg active">
+    <img src="/images/image2.png" class="bg">
+    <img src="/images/image3.png" class="bg">
+  </div>
+
+  <div class="card">
+    <img src="<%= botAvatar %>" alt="Bot Avatar" class="avatar">
+    <h1><%= botName %>#<%= botDiscriminator %></h1>
     <h2>Lost Spirit Stats</h2>
-    <div class="leaderboard" id="leaderboard">
-      <h3>Top 10 Players</h3>
-      <ol id="lb-list"></ol>
-    </div>
+    <p>Top 10 Players</p>
   </div>
 
   <script>
-    const images = [
-      '/public/images/image1.png',
-      '/public/images/image2.png',
-      '/public/images/image3.png'
-    ];
-    let currentIndex = 0;
-
-    function changeBackground() {
-      currentIndex = (currentIndex + 1) % images.length;
-      document.body.style.backgroundImage = `url('${images[currentIndex]}')`;
-    }
-
-    document.body.style.backgroundImage = `url('${images[0]}')`;
-    setInterval(changeBackground, 30000);
-
-    async function updateData() {
-      try {
-        const token = "<%= process.env.BOT_TOKEN %>"; // use .env token
-        const botId = "1408489196062248980";
-        const userId = "1042488971017588797";
-
-        // fetch bot avatar
-        const botRes = await fetch(`https://discord.com/api/v10/users/${botId}`, {
-          headers: { Authorization: `Bot ${token}` },
-        });
-        const botData = await botRes.json();
-        document.getElementById("botAvatar").src =
-          `https://cdn.discordapp.com/avatars/${botId}/${botData.avatar}.png?size=128`;
-
-        // fetch user avatar
-        const userRes = await fetch(`https://discord.com/api/v10/users/${userId}`, {
-          headers: { Authorization: `Bot ${token}` },
-        });
-        const userData = await userRes.json();
-        document.getElementById("userAvatar").src =
-          `https://cdn.discordapp.com/avatars/${userId}/${userData.avatar}.png?size=128`;
-
-        // fetch leaderboard
-        const lbRes = await fetch('/leaderboard.json'); // replace with your endpoint later
-        const lbData = await lbRes.json();
-
-        const list = document.getElementById('lb-list');
-        list.innerHTML = lbData
-          .slice(0, 10)
-          .map((entry, i) => `<li>#${i + 1} ${entry.name} — ${entry.exp} EXP</li>`)
-          .join('');
-
-      } catch (err) {
-        console.error("Error fetching data:", err);
-      }
-    }
-
-    updateData();
-    setInterval(updateData, 30000);
+    const slides = document.querySelectorAll('.background-slideshow img');
+    let current = 0;
+    setInterval(() => {
+      slides[current].classList.remove('active');
+      current = (current + 1) % slides.length;
+      slides[current].classList.add('active');
+    }, 30000);
   </script>
 </body>
 </html>
-
