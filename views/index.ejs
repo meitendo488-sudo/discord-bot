@@ -1,155 +1,167 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lost Spirit Stats</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IchiBot Status</title>
   <style>
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
-    }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
       font-family: 'Poppins', sans-serif;
       color: white;
-      text-align: center;
-      background: black;
     }
 
-    /* Background fading container */
-    #background {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+    body {
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
-      transition: opacity 2s ease-in-out;
-      z-index: -2;
-      opacity: 1;
+      transition: background-image 2s ease-in-out;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+      backdrop-filter: brightness(0.8);
     }
 
-    #overlay {
+    .overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: -1;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 0;
     }
 
-    .content {
+    .container {
       position: relative;
-      z-index: 1;
-      top: 50%;
-      transform: translateY(-50%);
+      z-index: 2;
       text-align: center;
-      animation: fadeIn 2s ease-in-out;
+      padding: 30px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 20px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-60%); }
-      to { opacity: 1; transform: translateY(-50%); }
+    img {
+      border-radius: 50%;
+      width: 120px;
+      height: 120px;
+      border: 3px solid white;
+      margin: 10px;
     }
 
     h1 {
-      font-size: 3rem;
-      letter-spacing: 2px;
-      margin-bottom: 10px;
+      font-size: 2rem;
+      margin-top: 10px;
     }
 
-    p {
-      font-size: 1.2rem;
-      color: #ccc;
-      margin-bottom: 25px;
+    h2 {
+      font-weight: 400;
+      margin-bottom: 20px;
     }
 
-    .profiles {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 50px;
-      flex-wrap: wrap;
+    .leaderboard {
+      margin-top: 20px;
+      text-align: left;
     }
 
-    .profile {
+    .leaderboard h3 {
       text-align: center;
-      animation: fadeIn 2s ease-in-out;
-    }
-
-    .avatar {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      border: 3px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
-      object-fit: cover;
       margin-bottom: 10px;
-      transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
     }
 
-    .avatar:hover {
-      transform: scale(1.1);
-      box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+    .leaderboard ol {
+      list-style: none;
+      padding: 0;
     }
 
-    .profile span {
-      display: block;
-      font-weight: 500;
-      font-size: 1.1rem;
+    .leaderboard li {
+      background: rgba(255, 255, 255, 0.1);
+      margin: 5px 0;
+      padding: 10px;
+      border-radius: 10px;
     }
+
   </style>
 </head>
 <body>
-  <div id="background"></div>
-  <div id="overlay"></div>
-
-  <div class="content">
-    <h1>Lost Spirit Stats</h1>
-    <p>Tracking the souls of the strongest...</p>
-
-    <div class="profiles">
-      <div class="profile">
-        <img src="/images/botpfp.png" alt="IchiBot" class="avatar">
-        <span>IchiBot#3137</span>
-      </div>
-
-      <div class="profile">
-        <img src="/images/yumepfp.png" alt="1.yume" class="avatar">
-        <span>1.yume</span>
-      </div>
+  <div class="overlay"></div>
+  <div class="container">
+    <div id="profiles">
+      <img id="botAvatar" alt="Bot Avatar" />
+      <img id="userAvatar" alt="User Avatar" />
+    </div>
+    <h1>IchiBot#3137</h1>
+    <h2>Lost Spirit Stats</h2>
+    <div class="leaderboard" id="leaderboard">
+      <h3>Top 10 Players</h3>
+      <ol id="lb-list"></ol>
     </div>
   </div>
 
   <script>
     const images = [
-      '/images/image1.png',
-      '/images/image2.png',
-      '/images/image3.png'
+      '/public/images/image1.png',
+      '/public/images/image2.png',
+      '/public/images/image3.png'
     ];
-
-    let current = 0;
-    const bg = document.getElementById('background');
+    let currentIndex = 0;
 
     function changeBackground() {
-      bg.style.opacity = 0;
-      setTimeout(() => {
-        bg.style.backgroundImage = `url('${images[current]}')`;
-        bg.style.opacity = 1;
-      }, 2000);
-      current = (current + 1) % images.length;
+      currentIndex = (currentIndex + 1) % images.length;
+      document.body.style.backgroundImage = `url('${images[currentIndex]}')`;
     }
 
-    bg.style.backgroundImage = `url('${images[0]}')`;
+    document.body.style.backgroundImage = `url('${images[0]}')`;
     setInterval(changeBackground, 30000);
+
+    async function updateData() {
+      try {
+        const token = "<%= process.env.BOT_TOKEN %>"; // use .env token
+        const botId = "1408489196062248980";
+        const userId = "1042488971017588797";
+
+        // fetch bot avatar
+        const botRes = await fetch(`https://discord.com/api/v10/users/${botId}`, {
+          headers: { Authorization: `Bot ${token}` },
+        });
+        const botData = await botRes.json();
+        document.getElementById("botAvatar").src =
+          `https://cdn.discordapp.com/avatars/${botId}/${botData.avatar}.png?size=128`;
+
+        // fetch user avatar
+        const userRes = await fetch(`https://discord.com/api/v10/users/${userId}`, {
+          headers: { Authorization: `Bot ${token}` },
+        });
+        const userData = await userRes.json();
+        document.getElementById("userAvatar").src =
+          `https://cdn.discordapp.com/avatars/${userId}/${userData.avatar}.png?size=128`;
+
+        // fetch leaderboard
+        const lbRes = await fetch('/leaderboard.json'); // replace with your endpoint later
+        const lbData = await lbRes.json();
+
+        const list = document.getElementById('lb-list');
+        list.innerHTML = lbData
+          .slice(0, 10)
+          .map((entry, i) => `<li>#${i + 1} ${entry.name} — ${entry.exp} EXP</li>`)
+          .join('');
+
+      } catch (err) {
+        console.error("Error fetching data:", err);
+      }
+    }
+
+    updateData();
+    setInterval(updateData, 30000);
   </script>
 </body>
 </html>
+
