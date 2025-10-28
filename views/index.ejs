@@ -5,95 +5,151 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lost Spirit Stats</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Poppins', sans-serif;
       color: white;
       text-align: center;
+      background: black;
+    }
+
+    /* Background fading container */
+    #background {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
-      transition: background-image 1s ease-in-out;
-      height: 100vh;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
+      transition: opacity 2s ease-in-out;
+      z-index: -2;
+      opacity: 1;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: -1;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      top: 50%;
+      transform: translateY(-50%);
+      text-align: center;
+      animation: fadeIn 2s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-60%); }
+      to { opacity: 1; transform: translateY(-50%); }
     }
 
     h1 {
-      font-size: 2.5em;
+      font-size: 3rem;
+      letter-spacing: 2px;
       margin-bottom: 10px;
-      text-shadow: 0 0 10px rgba(0,0,0,0.6);
     }
 
-    table {
-      border-collapse: collapse;
-      width: 60%;
-      max-width: 800px;
-      background: rgba(0, 0, 0, 0.6);
-      border-radius: 10px;
-      overflow: hidden;
+    p {
+      font-size: 1.2rem;
+      color: #ccc;
+      margin-bottom: 25px;
     }
 
-    th, td {
-      padding: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    .profiles {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 50px;
+      flex-wrap: wrap;
     }
 
-    th {
-      background-color: rgba(255, 255, 255, 0.1);
-      font-weight: bold;
+    .profile {
+      text-align: center;
+      animation: fadeIn 2s ease-in-out;
     }
 
-    tr:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+    .avatar {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+      object-fit: cover;
+      margin-bottom: 10px;
+      transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
     }
 
-    footer {
-      position: absolute;
-      bottom: 10px;
-      font-size: 0.9em;
-      opacity: 0.8;
+    .avatar:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+    }
+
+    .profile span {
+      display: block;
+      font-weight: 500;
+      font-size: 1.1rem;
     }
   </style>
 </head>
 <body>
-  <h1>Lost Spirit Stats</h1>
+  <div id="background"></div>
+  <div id="overlay"></div>
 
-  <table>
-    <tr>
-      <th>Rank</th>
-      <th>User</th>
-      <th>Points</th>
-    </tr>
-    <% data.forEach((player, index) => { %>
-      <tr>
-        <td><%= index + 1 %></td>
-        <td><%= player.username %></td>
-        <td><%= player.points %></td>
-      </tr>
-    <% }) %>
-  </table>
+  <div class="content">
+    <h1>Lost Spirit Stats</h1>
+    <p>Tracking the souls of the strongest...</p>
 
-  <footer>Powered by Lost Spirit Bot</footer>
+    <div class="profiles">
+      <div class="profile">
+        <img src="/images/botpfp.png" alt="IchiBot" class="avatar">
+        <span>IchiBot#3137</span>
+      </div>
+
+      <div class="profile">
+        <img src="/images/yumepfp.png" alt="1.yume" class="avatar">
+        <span>1.yume</span>
+      </div>
+    </div>
+  </div>
 
   <script>
-    const backgrounds = [
-      '/images/bg1.png',
-      '/images/bg2.png',
-      '/images/bg3.png'
+    const images = [
+      '/images/image1.png',
+      '/images/image2.png',
+      '/images/image3.png'
     ];
-    let index = 0;
+
+    let current = 0;
+    const bg = document.getElementById('background');
 
     function changeBackground() {
-      document.body.style.backgroundImage = `url('${backgrounds[index]}')`;
-      index = (index + 1) % backgrounds.length;
+      bg.style.opacity = 0;
+      setTimeout(() => {
+        bg.style.backgroundImage = `url('${images[current]}')`;
+        bg.style.opacity = 1;
+      }, 2000);
+      current = (current + 1) % images.length;
     }
 
-    changeBackground();
-    setInterval(changeBackground, 5000);
+    bg.style.backgroundImage = `url('${images[0]}')`;
+    setInterval(changeBackground, 30000);
   </script>
 </body>
 </html>
-
