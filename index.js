@@ -1,131 +1,126 @@
-require('dotenv').config();
-const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
-const path = require('path');
+const express = require("express");
+const { Client, GatewayIntentBits } = require("discord.js");
+const path = require("path");
+const fetch = require("node-fetch");
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ======== DISCORD BOT SETUP ========
+// Create Discord bot client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.MessageContent
   ],
 });
 
-let botInfo = {
-  name: 'Loading...',
-  avatar: '/images/image1.png',
-  discriminator: '0000',
-};
+app.set("view engine", "ejs");
+app.use(express.static(path.join(__dirname, "public")));
 
-// Cooldown map (stores user → command → timestamp)
+// Track cooldowns for commands
 const cooldowns = new Map();
 
-// Set your default cooldown time (in milliseconds)
-const DEFAULT_COOLDOWN = 5000; // 5 seconds
-
-// ======== HELPER: Check cooldown ========
-function isOnCooldown(userId, command) {
-  const now = Date.now();
-
-  if (!cooldowns.has(userId)) {
-    cooldowns.set(userId, {});
-  }
-
-  const userCooldowns = cooldowns.get(userId);
-  const lastUsed = userCooldowns[command] || 0;
-  const remaining = lastUsed + DEFAULT_COOLDOWN - now;
-
-  if (remaining > 0) {
-    return remaining;
-  }
-
-  userCooldowns[command] = now;
-  cooldowns.set(userId, userCooldowns);
-  return 0;
-}
-
-// ======== BOT EVENTS ========
-client.once('ready', () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  updateBotInfo();
-  setInterval(updateBotInfo, 5 * 60 * 1000);
+// When bot starts
+client.once("ready", () => {
+  console.log(`${client.user.tag} is online.`);
 });
 
-function updateBotInfo() {
-  if (!client.user) return;
-  botInfo = {
-    name: client.user.username,
-    avatar: client.user.displayAvatarURL(),
-    discriminator: client.user.discriminator,
-  };
-}
-
-// ======== BOT COMMANDS ========
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  const content = message.content.toLowerCase();
-
-  // Function to handle cooldown checks
-  const checkCooldown = (commandName) => {
-    const remaining = isOnCooldown(message.author.id, commandName);
-    if (remaining > 0) {
-      const secondsLeft = (remaining / 1000).toFixed(1);
-      message.reply(`⏳ That command is on cooldown! Please wait **${secondsLeft}s** before using it again.`);
-      return true;
-    }
-    return false;
-  };
-
-  if (content === '!ping') {
-    if (checkCooldown('ping')) return;
-    return message.reply(`🏓 Pong! Latency: ${Date.now() - message.createdTimestamp}ms`);
-  }
-
-  if (content === '!cmds' || content === '!commands') {
-    if (checkCooldown('cmds')) return;
-    return message.reply(
-      `🪄 **Available Commands:**\n` +
-      `\`!ping\` — Check bot latency\n` +
-      `\`!cmds\` or \`!commands\` — Show all commands\n` +
-      `\`!userinfo\` — Display your username & ID\n` +
-      `\`!serverinfo\` — Show server name & member count\n`
-    );
-  }
-
-  if (content === '!userinfo') {
-    if (checkCooldown('userinfo')) return;
-    return message.reply(`👤 **Your Info:**\nUsername: ${message.author.tag}\nID: ${message.author.id}`);
-  }
-
-  if (content === '!serverinfo') {
-    if (checkCooldown('serverinfo')) return;
-    return message.reply(`🏠 **Server Info:**\nName: ${message.guild.name}\nMembers: ${message.guild.memberCount}`);
-  }
-});
-
-// ======== LOGIN TO DISCORD ========
-client.login(process.env.DISCORD_TOKEN);
-
-// ======== EXPRESS WEBSITE ========
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/', async (req, res) => {
+// Home route — renders your website
+app.get("/", async (req, res) => {
   try {
-    res.render('index', {
-      botAvatar: botInfo.avatar,
-      botName: botInfo.name,
-      botDiscriminator: botInfo.discriminator,
+    const botUser = client.user;
+    const userId = "1042488971017588797"; // your Discord ID
+
+    // Fetch your Discord user info
+    const userData = await fetch(`https://discord.com/api/v10/users/${userId}`, {
+      headers: { Authorization: `Bot ${process.env.BOT_TOKEN}` },
+    }).then((r) => r.json());
+
+    res.render("index", {
+      botAvatar: botUser.displayAvatarURL({ format: "png", size: 256 }),
+      botName: botUser.tag,
+      userAvatar: `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=256`,
+      username: `${userData.username}#${userData.discriminator}`,
     });
   } catch (err) {
-    console.error('Error loading page:', err);
-    res.status(500).send('Error loading page');
+    console.error("Error fetching user data:", err);
+    res.render("index", {
+      botAvatar: "",
+      botName: "IchiBot",
+      userAvatar: "",
+      username: "User",
+    });
   }
 });
 
-app.listen(PORT, () => console.log(`🌍 Web server running on port ${PORT}`));
+// Command handler
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+
+  const prefix = "!";
+  if (!message.content.startsWith(prefix)) return;
+
+  const args = message.content.slice(prefix.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  const userId = message.author.id;
+  const now = Date.now();
+  const cooldownAmount = 5000; // 5 seconds cooldown
+
+  // Cooldown logic
+  if (!cooldowns.has(command)) cooldowns.set(command, new Map());
+  const timestamps = cooldowns.get(command);
+
+  if (timestamps.has(userId)) {
+    const expirationTime = timestamps.get(userId) + cooldownAmount;
+    if (now < expirationTime) {
+      const timeLeft = ((expirationTime - now) / 1000).toFixed(1);
+      return message.reply(`⏳ Command is on cooldown! Try again in **${timeLeft}s**.`);
+    }
+  }
+
+  timestamps.set(userId, now);
+  setTimeout(() => timestamps.delete(userId), cooldownAmount);
+
+  // ---- COMMANDS ----
+  if (command === "ping") {
+    return message.reply("🏓 Pong!");
+  }
+
+  if (command === "cmds" || command === "commands") {
+    const commands = [
+      "!ping — Check bot latency",
+      "!bleach — Shows a random Bleach character or quote",
+      "!leaderboard — Shows the top players",
+      "!stats — Displays your spirit stats",
+      "!help — Shows all commands",
+    ];
+    return message.reply(`🧠 **Available Commands:**\n\n${commands.join("\n")}`);
+  }
+
+  if (command === "bleach") {
+    const quotes = [
+      "“If I don’t wield the sword, I can’t protect you. If I keep wielding the sword, I can’t embrace you.” – Ichigo Kurosaki",
+      "“We are all like fireworks: we climb, shine and always go our separate ways and become further apart. But even when that time comes, let’s not disappear like a firework and continue to shine forever.” – Toshiro Hitsugaya",
+      "“I’m not fighting because I want to win. I’m fighting because I have to protect you.” – Ichigo Kurosaki",
+    ];
+    const random = quotes[Math.floor(Math.random() * quotes.length)];
+    return message.reply(`🌀 **Bleach Quote:**\n> ${random}`);
+  }
+
+  if (command === "leaderboard") {
+    return message.reply("📊 The leaderboard feature is coming soon!");
+  }
+
+  if (command === "help") {
+    return message.reply("Use `!cmds` or `!commands` to see all available commands!");
+  }
+});
+
+// Start bot
+client.login(process.env.BOT_TOKEN);
+
+// Start web server
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
