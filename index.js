@@ -1,179 +1,212 @@
+// index.js — full file (copy & paste, overwrite your current file)
+require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const { Client, GatewayIntentBits } = require("discord.js");
-const path = require("path");
-const fs = require("fs");
-const fetch = require("node-fetch");
-require("dotenv").config();
 
-const app = express();
 const PORT = process.env.PORT || 3000;
+const BOT_TOKEN = process.env.BOT_TOKEN;           // set this in Render environment
+const OWNER_ID = process.env.OWNER_ID || "1042488971017588797"; // set your user ID in Render env for website avatar
 
-// Discord bot setup
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-});
-
-// XP data file
-const XP_FILE = path.join(__dirname, "xpData.json");
-let xpData = {};
-if (fs.existsSync(XP_FILE)) {
-  xpData = JSON.parse(fs.readFileSync(XP_FILE));
+if (!BOT_TOKEN) {
+  console.error("Missing BOT_TOKEN in environment. Set BOT_TOKEN in Render/ENV.");
+  process.exit(1);
 }
 
-// Save XP data periodically
-setInterval(() => {
-  fs.writeFileSync(XP_FILE, JSON.stringify(xpData, null, 2));
-}, 10000);
-
+const app = express();
 app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
 app.use(express.static(path.join(__dirname, "public")));
 
-const cooldowns = new Map();
+// ---------- XP storage ----------
+const XP_FILE = path.join(__dirname, "xpData.json");
+let xpData = {};
+try {
+  if (fs.existsSync(XP_FILE)) xpData = JSON.parse(fs.readFileSync(XP_FILE, "utf8"));
+} catch (e) {
+  console.error("Failed reading xpData.json:", e);
+  xpData = {};
+}
+function saveXP() {
+  try {
+    fs.writeFileSync(XP_FILE, JSON.stringify(xpData, null, 2));
+  } catch (e) {
+    console.error("Failed writing xpData.json:", e);
+  }
+}
+// Periodic save
+setInterval(saveXP, 10000);
 
-// When bot is ready
-client.once("ready", () => {
-  console.log(`${client.user.tag} is online!`);
+// ---------- Discord client ----------
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
-// Give XP for chatting
+client.once("clientReady" in client ? "clientReady" : "ready", () => {
+  // compatibility note: older discord.js used 'ready'. Newer emit 'clientReady' as a convenience.
+  console.log(`✅ Logged in as ${client.user.tag}`);
+});
+
+// Helper: ensure xp entry
+function ensureXpEntry(id, username) {
+  if (!xpData[id]) xpData[id] = { xp: 0, level: 1, username: username || "Unknown" };
+  else if (username) xpData[id].username = username; // update name if changed
+}
+
+// Simple XP awarding for each message (you can tweak)
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
-  const userId = message.author.id;
-  if (!xpData[userId]) xpData[userId] = { xp: 0, level: 1, username: message.author.username };
-  xpData[userId].xp += Math.floor(Math.random() * 15) + 5;
+  const id = message.author.id;
+  ensureXpEntry(id, message.author.username);
+  const gain = Math.floor(Math.random() * 15) + 5;
+  xpData[id].xp += gain;
 
-  // Level up check
-  const neededXP = xpData[userId].level * 100;
-  if (xpData[userId].xp >= neededXP) {
-    xpData[userId].level++;
-    message.reply(`🎉 Congrats ${message.author.username}, you leveled up to **Level ${xpData[userId].level}!**`);
+  // level up check (simple)
+  const needed = xpData[id].level * 100;
+  if (xpData[id].xp >= needed) {
+    xpData[id].level++;
+    message.reply(`🎉 ${message.author.username} leveled up to level ${xpData[id].level}!`);
   }
 });
 
-// Command handling
+// ---------- Command handling (prefix '!') ----------
+const prefix = "!";
+const cooldowns = new Map(); // Map<command, Map<userId, expiresAt>>
+
+function checkCooldown(cmd, userId, seconds) {
+  if (!cooldowns.has(cmd)) cooldowns.set(cmd, new Map());
+  const map = cooldowns.get(cmd);
+  const now = Date.now();
+  if (map.has(userId) && map.get(userId) > now) {
+    const timeLeft = ((map.get(userId) - now) / 1000).toFixed(1);
+    return { ok: false, timeLeft };
+  }
+  map.set(userId, now + seconds * 1000);
+  setTimeout(() => map.delete(userId), seconds * 1000);
+  return { ok: true };
+}
+
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
-  const prefix = "!";
   if (!message.content.startsWith(prefix)) return;
 
-  const args = message.content.slice(prefix.length).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
-  const userId = message.author.id;
-  const now = Date.now();
-  const cooldownAmount = 5000;
+  const args = message.content.slice(prefix.length).trim().split(/\s+/);
+  const cmd = args.shift().toLowerCase();
+  const uid = message.author.id;
 
-  if (!cooldowns.has(command)) cooldowns.set(command, new Map());
-  const timestamps = cooldowns.get(command);
+  // simple per-command cooldowns (customize seconds)
+  const cooldownTimes = {
+    cmds: 3,
+    commands: 3,
+    ping: 5,
+    bleach: 10,
+    lb: 10,
+    leaderboard: 10,
+    stats: 5,
+  };
 
-  if (timestamps.has(userId)) {
-    const expiration = timestamps.get(userId) + cooldownAmount;
-    if (now < expiration) {
-      const timeLeft = ((expiration - now) / 1000).toFixed(1);
-      return message.reply(`⏳ That command is on cooldown! Try again in **${timeLeft}s**.`);
-    }
+  const cd = cooldownTimes[cmd] ?? 3;
+  const cdCheck = checkCooldown(cmd, uid, cd);
+  if (!cdCheck.ok) {
+    return message.reply(`⏳ Command on cooldown. Try again in ${cdCheck.timeLeft}s.`);
   }
 
-  timestamps.set(userId, now);
-  setTimeout(() => timestamps.delete(userId), cooldownAmount);
-
-  // -------------------
-  // COMMANDS
-  // -------------------
-  if (command === "ping") {
+  // Commands
+  if (cmd === "ping") {
     return message.reply("🏓 Pong!");
   }
 
-  if (command === "cmds" || command === "commands") {
-    const cmds = [
-      "!ping — Check bot latency",
-      "!bleach — Random Bleach quote",
-      "!leaderboard — Show top XP users",
-      "!stats — View your current XP & level",
-      "!help — Show all commands",
+  if (cmd === "cmds" || cmd === "commands") {
+    const list = [
+      "!ping — bot latency",
+      "!cmds / !commands — show this list",
+      "!bleach — random Bleach quote",
+      "!leaderboard / !lb — top 10 XP",
+      "!stats — your XP & level",
     ];
-    return message.reply(`📜 **Available Commands:**\n\n${cmds.join("\n")}`);
+    return message.reply(`📜 Commands:\n\n${list.join("\n")}`);
   }
 
-  if (command === "bleach") {
+  if (cmd === "bleach") {
+    // sample characters/quotes (expand as you like)
+    const characters = [
+      "Ichigo Kurosaki",
+      "Rukia Kuchiki",
+      "Toshiro Hitsugaya",
+      "Byakuya Kuchiki",
+      "Renji Abarai",
+      "Kisuke Urahara",
+      "Kenpachi Zaraki",
+      "Sosuke Aizen",
+      "Byakuya Kuchiki",
+      "Orihime Inoue",
+    ];
     const quotes = [
-      "“If I don’t wield the sword, I can’t protect you. If I keep wielding the sword, I can’t embrace you.” – Ichigo Kurosaki",
-      "“We are all like fireworks: we climb, shine and always go our separate ways and become further apart. But even when that time comes, let’s not disappear like a firework and continue to shine forever.” – Toshiro Hitsugaya",
-      "“I'm not fighting because I want to win. I'm fighting because I have to protect you.” – Ichigo Kurosaki",
+      "If you fight for your friends, no one can take them away.",
+      "We are all like fireworks: we climb, shine and always go our separate ways and become further apart.",
+      "I'm not fighting because I want to win. I'm fighting because I have to protect you.",
     ];
-    const random = quotes[Math.floor(Math.random() * quotes.length)];
-    return message.reply(`🌀 **Bleach Quote:**\n> ${random}`);
+    const pick = Math.random() < 0.6 ? characters[Math.floor(Math.random() * characters.length)] : quotes[Math.floor(Math.random() * quotes.length)];
+    return message.reply(`🌀 ${pick}`);
   }
 
-  if (command === "leaderboard") {
+  if (cmd === "leaderboard" || cmd === "lb") {
     const sorted = Object.entries(xpData)
       .sort(([, a], [, b]) => b.xp - a.xp)
       .slice(0, 10);
 
-    if (sorted.length === 0) return message.reply("📉 No data yet! Start chatting to earn XP!");
+    if (sorted.length === 0) return message.reply("📉 No XP data yet. Talk in the server to earn XP!");
 
-    const leaderboardText = sorted
-      .map(
-        ([id, data], i) =>
-          `**${i + 1}.** ${data.username || "Unknown"} — 🧠 ${data.xp} XP (Lv. ${data.level})`
-      )
+    const text = sorted
+      .map(([id, data], i) => `**${i + 1}.** ${data.username || "Unknown"} — ${data.xp} XP (Lv ${data.level})`)
       .join("\n");
-
-    return message.reply(`🏆 **Top Players Leaderboard** 🏆\n\n${leaderboardText}`);
+    return message.reply(`🏆 Top players:\n\n${text}`);
   }
 
-  if (command === "stats") {
-    const data = xpData[userId];
-    if (!data) return message.reply("❌ You have no XP yet! Start chatting to earn some!");
-    return message.reply(`📊 **Your Stats:**\nXP: ${data.xp}\nLevel: ${data.level}`);
-  }
-
-  if (command === "help") {
-    return message.reply("Use `!cmds` to see all commands.");
+  if (cmd === "stats") {
+    const data = xpData[uid];
+    if (!data) return message.reply("You have no XP yet — start chatting!");
+    return message.reply(`📊 Your stats: XP ${data.xp} — Level ${data.level}`);
   }
 });
 
-// -------------------
-// WEBSITE
-// -------------------
+
+// ---------- Website route ----------
 app.get("/", async (req, res) => {
   try {
     const botUser = client.user;
-    const userId = "1042488971017588797"; // your Discord ID
+    // fetch owner user via discord.js (works once bot is logged in)
+    let ownerUser = null;
+    try {
+      ownerUser = await client.users.fetch(OWNER_ID);
+    } catch (e) {
+      console.warn("Failed to fetch owner user:", e?.message || e);
+    }
 
-    const userData = await fetch(`https://discord.com/api/v10/users/${userId}`, {
-      headers: { Authorization: `Bot ${process.env.BOT_TOKEN}` },
-    }).then((r) => r.json());
-
-    // Sort top 10 users by XP
-    const topPlayers = Object.entries(xpData)
+    const top = Object.entries(xpData)
       .sort(([, a], [, b]) => b.xp - a.xp)
       .slice(0, 10)
-      .map(([id, data], i) => ({
-        rank: i + 1,
-        name: data.username || "Unknown",
-        xp: data.xp,
-        level: data.level,
-      }));
+      .map(([id, d], i) => ({ rank: i + 1, name: d.username || "Unknown", xp: d.xp, level: d.level }));
 
     res.render("index", {
-      botAvatar: botUser.displayAvatarURL({ format: "png", size: 256 }),
-      botName: botUser.tag,
-      userAvatar: `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=256`,
-      username: `${userData.username}#${userData.discriminator}`,
-      leaderboard: topPlayers,
+      botAvatar: botUser ? botUser.displayAvatarURL({ extension: "png", size: 256 }) : "",
+      botName: botUser ? botUser.tag : "Bot",
+      userAvatar: ownerUser ? ownerUser.displayAvatarURL({ extension: "png", size: 256 }) : "",
+      username: ownerUser ? `${ownerUser.username}#${ownerUser.discriminator}` : "Owner",
+      leaderboard: top,
     });
   } catch (err) {
-    console.error("Error loading page:", err);
-    res.render("index", { botAvatar: "", botName: "", userAvatar: "", username: "", leaderboard: [] });
+    console.error("Website error:", err);
+    res.status(500).send("Server error");
   }
 });
 
-// Start bot & server
-client.login(process.env.BOT_TOKEN);
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// start express
+app.listen(PORT, () => console.log(`🌐 Website running on port ${PORT}`));
 
+// login bot
+client.login(BOT_TOKEN).catch((err) => {
+  console.error("Failed to login bot:", err);
+  process.exit(1);
+});
