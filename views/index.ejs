@@ -1,1 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lost Spirit Stats</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      color: white;
+      text-align: center;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: background-image 1s ease-in-out;
+      height: 100vh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+      text-shadow: 0 0 10px rgba(0,0,0,0.6);
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 60%;
+      max-width: 800px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    th {
+      background-color: rgba(255, 255, 255, 0.1);
+      font-weight: bold;
+    }
+
+    tr:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    footer {
+      position: absolute;
+      bottom: 10px;
+      font-size: 0.9em;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>Lost Spirit Stats</h1>
+
+  <table>
+    <tr>
+      <th>Rank</th>
+      <th>User</th>
+      <th>Points</th>
+    </tr>
+    <% data.forEach((player, index) => { %>
+      <tr>
+        <td><%= index + 1 %></td>
+        <td><%= player.username %></td>
+        <td><%= player.points %></td>
+      </tr>
+    <% }) %>
+  </table>
+
+  <footer>Powered by Lost Spirit Bot</footer>
+
+  <script>
+    const backgrounds = [
+      '/images/bg1.png',
+      '/images/bg2.png',
+      '/images/bg3.png'
+    ];
+    let index = 0;
+
+    function changeBackground() {
+      document.body.style.backgroundImage = `url('${backgrounds[index]}')`;
+      index = (index + 1) % backgrounds.length;
+    }
+
+    changeBackground();
+    setInterval(changeBackground, 5000);
+  </script>
+</body>
+</html>
 
